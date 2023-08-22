@@ -1,0 +1,5 @@
+venv/
+ojitos369_db_connections.egg-info
+ojitos369_mysql_db.egg-info
+*.egg-info
+*__pycache__/
