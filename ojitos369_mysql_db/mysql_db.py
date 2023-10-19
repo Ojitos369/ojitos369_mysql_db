@@ -12,7 +12,7 @@ class ConexionMySQL:
             port=int(db_data['port']),
             db=db_data['name'],
         )
-        print('##### Activando DB #####')
+        # print('##### Activando DB #####')
 
         self.cursor = db_conn.cursor()
         self.db_conn = db_conn
@@ -161,4 +161,11 @@ class ConexionMySQL:
 
     def desactivar_raise_error(self):
         self.raise_error = False
+        return True
+    
+    def __del__(self):
+        try:
+            self.close()
+        except:
+            pass
         return True
