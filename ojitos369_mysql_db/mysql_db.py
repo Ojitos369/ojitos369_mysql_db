@@ -86,13 +86,8 @@ class ConexionMySQL:
             return resultado
 
     @local_base
-    def preparar_transaccion(self, query):
+    def ejecutar(self, query, params=None):
         self.query = query
-        self.cursor.execute(query)
-        return True
-
-    @local_base
-    def ejecutar(self, params=None):
         self.params = self.validate_params(params)
         if not self.params:
             self.cursor.execute(self.query)
@@ -105,7 +100,8 @@ class ConexionMySQL:
             return True
     
     @local_base
-    def ejecutar_multiple(self, params):
+    def ejecutar_multiple(self, query, params):
+        self.query = query
         self.params = self.validate_params(params)
 
         if type(self.params) in (list, tuple):
