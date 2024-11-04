@@ -9,7 +9,7 @@ class ConexionMySQL:
             host=db_data["host"],
             user=db_data["user"],
             password=db_data["password"],
-            database=db_data["scheme"]
+            database=db_data["name"]
         )
         # print("##### Activando DB #####")
 
