@@ -5,11 +5,17 @@ import pandas as pd
 
 class ConexionMySQL:
     def __init__(self, db_data, **kwargs):
+        host = db_data["host"]
+        user = db_data["user"]
+        password = db_data["password"]
+        database = db_data["name"]
+        port = db_data["port"]
         db_conn = pymysql.connect(
-            host=db_data["host"],
-            user=db_data["user"],
-            password=db_data["password"],
-            database=db_data["name"]
+            host=host,
+            user=user,
+            password=password,
+            database=database,
+            port=port,
         )
         # print("##### Activando DB #####")
 
