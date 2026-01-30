@@ -1,28 +1,28 @@
 import math
 from ojitos369.utils import print_line_center as plc
-import mysql.connector
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import pandas as pd
 
-class ConexionMySQL:
+class ConexionPostgreSQL:
     def __init__(self, db_data, **kwargs):
         host = db_data["host"]
         user = db_data["user"]
         password = db_data["password"]
-        database = db_data.get("database", None) or db_data.get("name", None)
-        port = int(db_data.get("port", 3306))
-        
+        dbname = db_data.get("dbname", None) or db_data.get("name", None)
+        port = int(db_data.get("port", 5432))
         self.db_data = {
             "host": host,
             "user": user,
             "password": password,
-            "database": database,
+            "dbname": dbname,
             "port": port,
         }
+        db_conn = psycopg2.connect(**self.db_data)
         
-        # Connect using mysql-connector-python
-        db_conn = mysql.connector.connect(**self.db_data)
-        
-        self.cursor = db_conn.cursor()
+        self.cursor_name = kwargs.get("cursor_name", "")
+        self.cursor = db_conn.cursor(name=self.cursor_name) if self.cursor_name else db_conn.cursor()
+
         self.db_conn = db_conn
 
         self.ce = None
@@ -33,7 +33,7 @@ class ConexionMySQL:
 
         for k in kwargs:
             setattr(self, k, kwargs[k])
-    
+
     def local_base(func):
         def wrapper(*args, **kwargs):
             ele = args[0]
@@ -86,13 +86,12 @@ class ConexionMySQL:
             self.cursor.execute(query, self.params)
         else:
             self.cursor.execute(query)
-        
         descripcion = [d[0].lower() for d in self.cursor.description]
         if self.mode == "pd":
             r = pd.DataFrame(self.cursor.fetchall(), columns=descripcion)
             return r
         else:
-            resultado = [dict(zip(descripcion, linea)) for linea in self.cursor.fetchall()]
+            resultado = [dict(zip(descripcion, linea)) for linea in self.cursor]
             return resultado
 
     @local_base
@@ -113,7 +112,6 @@ class ConexionMySQL:
     def ejecutar_multiple(self, query, params):
         self.query = query
         self.params = self.validate_params(params)
-
         if type(self.params) in (list, tuple):
             self.cursor.executemany(self.query, self.params)
             return True
@@ -126,7 +124,6 @@ class ConexionMySQL:
     def paginador(self, query, registros_pagina=10, pagina=1, params=None, totales=None):
         self.query = query
         self.params = self.validate_params(params)
-        
         if totales is None:
             if self.params:
                 num_registros = len(self.consulta_asociativa(query, self.params))
@@ -134,7 +131,6 @@ class ConexionMySQL:
                 num_registros = len(self.consulta_asociativa(query))
         else:
             num_registros = totales
-            
         paginas = math.ceil(num_registros / registros_pagina)
         if paginas < pagina: pagina = paginas
         limite_superior = registros_pagina * pagina
@@ -142,8 +138,8 @@ class ConexionMySQL:
 
         query = """ SELECT *
                     FROM ({0}) A
-                    LIMIT {1}, {2}
-                """.format(query, limite_inferior, registros_pagina)
+                    LIMIT {1} OFFSET {2}
+                """.format(query, registros_pagina, limite_inferior)
         self.query = query
         self.params = self.validate_params(params)
         if self.params:
@@ -177,33 +173,29 @@ class ConexionMySQL:
             return params.to_dict()
         else:
             raise Exception("Tipo de parametro no valido")
-            
+
     def consulta_chunks(self, query, params=None, chunk_size=10000):
-        # Create a separate connection for chunks to avoid cursor interference
-        conn_lotes = mysql.connector.connect(**self.db_data)
+        conn_lotes = psycopg2.connect(**self.db_data)
         try:
-            cursor_lotes = conn_lotes.cursor(dictionary=True)
+            cursor_lotes = conn_lotes.cursor(
+                name= self.cursor_name + '_chunk_cursor',
+                cursor_factory=RealDictCursor
+            )
             self.query = query
             self.params = self.validate_params(params)
             if self.params:
                 cursor_lotes.execute(query, self.params)
             else:
                 cursor_lotes.execute(query)
-            
             while True:
                 registros = cursor_lotes.fetchmany(chunk_size)
                 if not registros:
                     break
-                
-                descripcion = [d[0].lower() for d in cursor_lotes.description]
-                if self.mode == "pd":
-                    # Convert list of dicts to DataFrame
-                    yield pd.DataFrame(registros)
-                else:
-                    yield registros
+                descripcion = [d.name for d in cursor_lotes.description]
+                yield pd.DataFrame(registros, columns=descripcion) if self.mode == "pd" else [dict(zip(descripcion, linea)) for linea in registros]
         finally:
             conn_lotes.close()
-
+            
     def rollback(self):
         self.db_conn.rollback()
         return True
@@ -249,6 +241,3 @@ class ConexionMySQL:
         except:
             pass
         return True
-
-# Required pips:
-# pip install mysql-connector-python pandas
